@@ -37,7 +37,7 @@ Author
 #include "singlePhaseTransportModel.H"
 #include "RASModel.H"
 #include "simpleControl.H"
-
+#include "ActuatorDisk.H"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 int main(int argc, char *argv[])
@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
 #   include "setRootCase.H"
 #   include "createTime.H"
 #   include "createMesh.H"
+#   include "createDiskFields.H"
 
     simpleControl simple(mesh);
 
@@ -52,6 +53,41 @@ int main(int argc, char *argv[])
 #   include "initContinuityErrs.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+
+    //========================================================================
+    //              Preliminary Field Loops
+    //========================================================================
+    
+    PreCalcs Pre;
+    Pre.readDataB2(mesh);
+    Pre.setDiskID(mesh, diskID, Large_for, Large_back);
+    Pre.setDatStop(mesh, diskID, DatStop);
+    
+    ActuatorDiskModel AcDisk;
+    AcDisk.readDataB2(mesh);
+    
+    forAll(mesh.C(), cellI) {
+      if(diskID[cellI] == 2) {
+    DiskRad[cellI] = AcDisk.getRadius(mesh.C()[cellI]);
+    DiskTheta[cellI] = AcDisk.getTheta(mesh.C()[cellI], DiskRad[cellI]);
+    DiskGama[cellI] = AcDisk.getBladeAngle(DiskRad[cellI]);
+    DiskChord[cellI] = AcDisk.getChordLength(DiskRad[cellI]);
+      }
+    }
+    
+    //Read in Airfoil profile data for NASA 0413-LS profile
+    AcDisk.readCSV_NASA0413LS();
+    
+    Info << "\n!!Running ActuatorDiskModel_15022016!!\n" << endl;
+
+    Info<< "\nStarting time loop\n" << endl;
+    
+    scalar relaxFactor;
+    
+    Istream& is1 = mesh.solutionDict().subDict("B2Fan").lookup("VolForceRelax");
+    is1.format(IOstream::ASCII); 
+    is1 >> relaxFactor;
 
     Info<< "\nStarting time loop\n" << endl;
 
@@ -61,6 +97,7 @@ int main(int argc, char *argv[])
 
         // Pressure-velocity SIMPLE corrector
         {
+#           include "TransportEqn.H"
 #           include "UEqn.H"
 #           include "pEqn.H"
         }
